@@ -11,6 +11,7 @@
     "cdk": "cdk"
   },
   "devDependencies": {
+    "@aws/dynamodb-data-mapper": "^0.7.3",
     "@types/aws-lambda": "^8.10.115",
     "@types/jest": "^29.5.1",
     "@types/node": "20.1.7",
