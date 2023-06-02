@@ -55,7 +55,10 @@ export const configureBackend = (scope: any) => {
     entry: path.join(__dirname, "/../src/backend-connector/Manifest/handler.ts"),
     bundling: {
       minify: true
-    }
+    },
+    environment: {
+      TABLE_NAME: PaymentTrackTable.tableName
+    },
   });
 
   // create Lambda Proxy Integration and resource, and add integration to api resource
@@ -82,4 +85,16 @@ export const configureBackend = (scope: any) => {
   const UserApiLambdaIntegration = new LambdaIntegration(UserApi);
   const UserApiResource = PaymentApi.root.addResource("user");
   UserApiResource.addMethod("POST", UserApiLambdaIntegration);
+
+  /////// PERMISSIONS
+
+  //Provide access to Lambdas on PaymentTrackTable
+  PaymentTrackTable.grantReadWriteData(Manifest);
+  //PaymentTrackTable.grantReadWriteData(PendingPaymentStream);
+  //PaymentTrackTable.grantReadWriteData(ProcessPendingPayment);
+  //PaymentTrackTable.grantStreamRead(PendingPaymentStream);
+
+  //Provide access to PendingPaymentStream on
+  //PendingPaymentQueue.grantSendMessages(PendingPaymentStream);
+  //PendingPaymentQueue.grantConsumeMessages(ProcessPendingPayment);
 }

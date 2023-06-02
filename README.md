@@ -29,8 +29,9 @@
 
 ## PARTE 2.2 - Rodando CDK - Executando o modelo
 1. Na pasta raiz deste projeto clonado, rode o comando `npm install` para buildar o código
-2. Faça um `cdk boostrap`. Todo o toolkit aws necessário será providenciado na cloud AWS
-3. Faça um `cdk deploy`
+2. npm install aws-sdk
+3. Faça um `cdk boostrap`. Todo o toolkit aws necessário será providenciado na cloud AWS
+4. Faça um `cdk deploy`
 5. Acesse o console e verifique os serviços que subiram via cloudformation
 6. Use `cdk watch` para acionar o deploy automaticamente ao salvar mudanças nos seus arquivos.
 * Work hard. Have fun. Make history.
