@@ -182,7 +182,8 @@ export const configureBackend = (scope: any) => {
 
   // create Lambda Proxy Integration and resource, and add integration to api resource
   const CancellationLambdaIntegration = new LambdaIntegration(Cancellation);
-  const CancellationResource = PaymentApi.root.addResource("cancellations");
+  const PaymentResourceWithId = PaymentResource.addResource("{paymentId}");
+  const CancellationResource = PaymentResourceWithId.addResource("cancellations");
   CancellationResource.addMethod("POST", CancellationLambdaIntegration);
   PaymentTrackTable.grantReadWriteData(Cancellation);
 
@@ -200,7 +201,7 @@ export const configureBackend = (scope: any) => {
 
   // create Lambda Proxy Integration and resource, and add integration to api resource
   const SettlementLambdaIntegration = new LambdaIntegration(Settlement);
-  const SettlementResource = PaymentApi.root.addResource("settlements");
+  const SettlementResource = PaymentResourceWithId.addResource("settlements");
   SettlementResource.addMethod("POST", SettlementLambdaIntegration);
   PaymentTrackTable.grantReadWriteData(Settlement);
 
@@ -218,7 +219,7 @@ export const configureBackend = (scope: any) => {
 
   // create Lambda Proxy Integration and resource, and add integration to api resource
   const RefundLambdaIntegration = new LambdaIntegration(Refund);
-  const RefundResource = PaymentApi.root.addResource("refunds");
+  const RefundResource = PaymentResourceWithId.addResource("refunds");
   RefundResource.addMethod("POST", RefundLambdaIntegration);
   PaymentTrackTable.grantReadWriteData(Refund);
 
