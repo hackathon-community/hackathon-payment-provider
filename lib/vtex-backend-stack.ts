@@ -66,6 +66,26 @@ export const configureBackend = (scope: any) => {
   const UserApiResource = PaymentApi.root.addResource("user");
   UserApiResource.addMethod("POST", UserApiLambdaIntegration);
 
+  // Create UserPost Lambda function
+  const PaymentPost = new NodejsFunction(scope, "PaymentPost", {
+    memorySize: 128,
+    timeout: Duration.seconds(5),
+    runtime: Runtime.NODEJS_16_X,
+    handler: 'handler',
+    entry: path.join(__dirname, "/../src/backend-connector/PaymentPost/handler.ts"),
+    bundling: {
+      minify: true
+    },
+    environment: {
+      TABLE_NAME: PaymentTrackTable.tableName
+    },
+  });
+
+  // create Lambda Proxy Integration and resource, and add integration to api resource
+  const PaymentPostLambdaIntegration = new LambdaIntegration(PaymentPost);
+  const PaymentPostResource = PaymentApi.root.addResource("payment");
+  PaymentPostResource.addMethod("POST", PaymentPostLambdaIntegration);
+
   // Create Manifest Lambda function
   const Manifest = new NodejsFunction(scope, "Manifest", {
     memorySize: 128,
@@ -174,7 +194,7 @@ export const configureBackend = (scope: any) => {
   /////// PERMISSIONS
 
   //Provide access to Lambdas on PaymentTrackTable
-  //PaymentTrackTable.grantReadWriteData(PendingPaymentStream);
+  PaymentTrackTable.grantReadWriteData(PaymentPost);
   //PaymentTrackTable.grantReadWriteData(ProcessPendingPayment);
   //PaymentTrackTable.grantStreamRead(PendingPaymentStream);
 

@@ -9,6 +9,7 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
   return {
     body: JSON.stringify('Hello from Lambda!'),
     statusCode: 200,
+    // THIS HEADER PART is mandatory for CORS to work
     headers: {
       'Access-Control-Allow-Headers': 'Content-Type',
       'Access-Control-Allow-Origin': '*',
