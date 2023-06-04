@@ -6,9 +6,15 @@ import * as path from 'path';
 import * as DynamoDB from "aws-cdk-lib/aws-dynamodb";
 import * as cdk from "aws-cdk-lib";
 import * as sqs from "aws-cdk-lib/aws-sqs";
+import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import { StartingPosition } from 'aws-cdk-lib/aws-lambda';
+import { FilterCriteria, FilterRule } from 'aws-cdk-lib/aws-lambda';
+import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 
 export const configureBackend = (scope: any) => {
   const AcquirerAPI = "testing-12345/v2"
+
+  /////// DynamoDB 
 
   // Create a DynamoDB table called PaymentTrackTable
   const PaymentTrackTable = new DynamoDB.Table(scope, "PaymentTrackTable", {
@@ -33,6 +39,8 @@ export const configureBackend = (scope: any) => {
     encryption: sqs.QueueEncryption.SQS_MANAGED,
   });
 
+  /////// API GATEWAY
+
   // Create an API Gateway using Lambda Proxy
   const PaymentApi = new RestApi(scope, "PaymentApi", {
     restApiName: "PaymentApi",
@@ -45,6 +53,8 @@ export const configureBackend = (scope: any) => {
       allowMethods: Cors.ALL_METHODS
     }
   });
+
+  /////// LAMBDAS
 
   // Create UserPost Lambda function
   const UserApi = new NodejsFunction(scope, "User", {
@@ -66,25 +76,62 @@ export const configureBackend = (scope: any) => {
   const UserApiResource = PaymentApi.root.addResource("user");
   UserApiResource.addMethod("POST", UserApiLambdaIntegration);
 
-  // Create UserPost Lambda function
-  const PaymentPost = new NodejsFunction(scope, "PaymentPost", {
+  // Create PendingPaymentStream Lambda function
+  const PendingPaymentStream = new NodejsFunction(scope, "PendingPaymentStream", {
     memorySize: 128,
     timeout: Duration.seconds(5),
     runtime: Runtime.NODEJS_16_X,
     handler: 'handler',
-    entry: path.join(__dirname, "/../src/backend-connector/PaymentPost/handler.ts"),
-    bundling: {
-      minify: true
-    },
+    entry: path.join(__dirname, "/../src/backend-connector/PendingPaymentStream/handler.ts"),
     environment: {
-      TABLE_NAME: PaymentTrackTable.tableName
+      TABLE_NAME: PaymentTrackTable.tableName,
+      PENDING_PAYMENT_QUEUE:  PendingPaymentQueue.queueName,
     },
   });
 
-  // create Lambda Proxy Integration and resource, and add integration to api resource
-  const PaymentPostLambdaIntegration = new LambdaIntegration(PaymentPost);
-  const PaymentPostResource = PaymentApi.root.addResource("payment");
-  PaymentPostResource.addMethod("POST", PaymentPostLambdaIntegration);
+  PendingPaymentStream.addEventSource(new DynamoEventSource(PaymentTrackTable, {
+    startingPosition: StartingPosition.TRIM_HORIZON,
+    batchSize: 1,
+    retryAttempts: 10,
+    filters: [
+      FilterCriteria.filter({
+        eventName: FilterRule.isEqual("INSERT"),
+        dynamodb: {
+          NewImage: { status: { S: FilterRule.isEqual("undefined") } }
+        }
+      }),
+      FilterCriteria.filter({
+        eventName: FilterRule.isEqual("MODIFY"),
+        dynamodb: {
+          NewImage: { status: { S: FilterRule.isEqual("undefined") } }
+        }
+      })
+    ]
+  }));
+
+  // Create ProcessPendingPayment Lambda function
+  const ProcessPendingPayment = new NodejsFunction(scope, "ProcessPendingPayment", {
+    memorySize: 128,
+    timeout: Duration.seconds(5),
+    runtime: Runtime.NODEJS_16_X,
+    handler: 'handler',
+    entry: path.join(__dirname, "/../src/backend-connector/ProcessPendingPayment/handler.ts"),
+    environment: {
+      TABLE_NAME: PaymentTrackTable.tableName,
+      PENDING_PAYMENT_QUEUE:  PendingPaymentQueue.queueName,
+    },
+  });
+
+  // Add SQS Event Source to Lambda Function
+  ProcessPendingPayment.addEventSource(
+    new SqsEventSource(PendingPaymentQueue, {
+      batchSize: 1,
+      enabled: true,
+      reportBatchItemFailures: true,
+      // retryAttempts: 10,
+      // maxConcurrency: 2,
+    })
+  );
 
   // Create Manifest Lambda function
   const Manifest = new NodejsFunction(scope, "Manifest", {
@@ -93,9 +140,6 @@ export const configureBackend = (scope: any) => {
     runtime: Runtime.NODEJS_16_X,
     handler: 'handler',
     entry: path.join(__dirname, "/../src/backend-connector/Manifest/handler.ts"),
-    bundling: {
-      minify: true
-    },
     environment: {
       TABLE_NAME: PaymentTrackTable.tableName
     },
@@ -113,9 +157,6 @@ export const configureBackend = (scope: any) => {
     runtime: Runtime.NODEJS_16_X,
     handler: 'handler',
     entry: path.join(__dirname, "/../src/backend-connector/Payment/handler.ts"),
-    bundling: {
-      minify: true
-    },
     environment: {
       TABLE_NAME: PaymentTrackTable.tableName
     },
@@ -134,9 +175,6 @@ export const configureBackend = (scope: any) => {
     runtime: Runtime.NODEJS_16_X,
     handler: 'handler',
     entry: path.join(__dirname, "/../src/backend-connector/Cancellation/handler.ts"),
-    bundling: {
-      minify: true
-    },
     environment: {
       TABLE_NAME: PaymentTrackTable.tableName
     },
@@ -155,9 +193,6 @@ export const configureBackend = (scope: any) => {
     runtime: Runtime.NODEJS_16_X,
     handler: 'handler',
     entry: path.join(__dirname, "/../src/backend-connector/Settlement/handler.ts"),
-    bundling: {
-      minify: true
-    },
     environment: {
       TABLE_NAME: PaymentTrackTable.tableName
     },
@@ -176,9 +211,6 @@ export const configureBackend = (scope: any) => {
     runtime: Runtime.NODEJS_16_X,
     handler: 'handler',
     entry: path.join(__dirname, "/../src/backend-connector/Refund/handler.ts"),
-    bundling: {
-      minify: true
-    },
     environment: {
       TABLE_NAME: PaymentTrackTable.tableName
     },
@@ -194,11 +226,12 @@ export const configureBackend = (scope: any) => {
   /////// PERMISSIONS
 
   //Provide access to Lambdas on PaymentTrackTable
-  PaymentTrackTable.grantReadWriteData(PaymentPost);
-  //PaymentTrackTable.grantReadWriteData(ProcessPendingPayment);
-  //PaymentTrackTable.grantStreamRead(PendingPaymentStream);
+  PaymentTrackTable.grantReadWriteData(Payment);
+  PaymentTrackTable.grantReadWriteData(PendingPaymentStream);
+  PaymentTrackTable.grantReadWriteData(ProcessPendingPayment);
+  PaymentTrackTable.grantStreamRead(PendingPaymentStream);
 
   //Provide access to PendingPaymentStream on
-  //PendingPaymentQueue.grantSendMessages(PendingPaymentStream);
-  //PendingPaymentQueue.grantConsumeMessages(ProcessPendingPayment);
+  PendingPaymentQueue.grantSendMessages(PendingPaymentStream);
+  PendingPaymentQueue.grantConsumeMessages(ProcessPendingPayment);
 }
