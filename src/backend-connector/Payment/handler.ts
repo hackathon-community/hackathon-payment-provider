@@ -1,6 +1,7 @@
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import AWS from 'aws-sdk';
 import axios from 'axios';
+import { AuthorizationRequest, PaymentResponse } from '../typings';
 
 const TABLE_NAME = process.env.TABLE_NAME;
 const ddbResource = new AWS.DynamoDB.DocumentClient();
@@ -12,14 +13,19 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
 
    // Ex 1
   // Example of how to get body from POST
-  const requestBody = JSON.parse(event.body || '');
+  if(event.body) {
+    console.log(event.body);
+  } else {
+    throw new Error('No body found');
+  }
+
+  const requestBody = JSON.parse(event.body) as AuthorizationRequest;
 
   const itemDict = {
     'paymentId': requestBody['paymentId'],
     'paymentMethod': requestBody['paymentMethod'],
     'currency': requestBody['currency'],
     'returnUrl': requestBody['returnUrl'],
-    'colunaNova': requestBody['colunaNova'],
     'status': 'undefined'
   };
 
