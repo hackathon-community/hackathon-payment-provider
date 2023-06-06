@@ -1,20 +1,20 @@
-import { Duration } from 'aws-cdk-lib';
-import { LambdaIntegration, RestApi, Cors } from 'aws-cdk-lib/aws-apigateway';
-import { Runtime } from 'aws-cdk-lib/aws-lambda';
-import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-import * as path from 'path';
+import { Duration } from "aws-cdk-lib";
+import { LambdaIntegration, RestApi, Cors } from "aws-cdk-lib/aws-apigateway";
+import { Runtime } from "aws-cdk-lib/aws-lambda";
+import { NodejsFunction } from "aws-cdk-lib/aws-lambda-nodejs";
+import * as path from "path";
 import * as DynamoDB from "aws-cdk-lib/aws-dynamodb";
 import * as cdk from "aws-cdk-lib";
 import * as sqs from "aws-cdk-lib/aws-sqs";
-import { DynamoEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
-import { StartingPosition } from 'aws-cdk-lib/aws-lambda';
-import { FilterCriteria, FilterRule } from 'aws-cdk-lib/aws-lambda';
-import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import { DynamoEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
+import { StartingPosition } from "aws-cdk-lib/aws-lambda";
+import { FilterCriteria, FilterRule } from "aws-cdk-lib/aws-lambda";
+import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 
 export const configureBackend = (scope: any) => {
-  const AcquirerAPI = "testing-12345/v2"
+  const AcquirerAPI = "testing-12345/v2";
 
-  /////// DynamoDB 
+  /////// DynamoDB
 
   // Create a DynamoDB table called PaymentTrackTable
   const PaymentTrackTable = new DynamoDB.Table(scope, "PaymentTrackTable", {
@@ -28,6 +28,24 @@ export const configureBackend = (scope: any) => {
     removalPolicy: cdk.RemovalPolicy.DESTROY,
   });
 
+  const AffiliatesAssociationTable = new DynamoDB.Table(
+    scope,
+    "AffiliatesAssociationTable",
+    {
+      partitionKey: {
+        name: "affiliateId",
+        type: DynamoDB.AttributeType.STRING,
+      },
+      sortKey: {
+        name: "affiliateDocument",
+        type: DynamoDB.AttributeType.STRING,
+      },
+      tableName: "AffiliatesAssociationTable",
+      billingMode: DynamoDB.BillingMode.PAY_PER_REQUEST,
+      stream: DynamoDB.StreamViewType.NEW_IMAGE,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    }
+  );
   /////// QUEUE
 
   // create an SQS queue called PendingPaymentQueue
@@ -50,24 +68,45 @@ export const configureBackend = (scope: any) => {
     },
     defaultCorsPreflightOptions: {
       allowOrigins: Cors.ALL_ORIGINS,
-      allowMethods: Cors.ALL_METHODS
-    }
+      allowMethods: Cors.ALL_METHODS,
+    },
   });
 
   /////// LAMBDAS
+
+  // Create Affiliate Lambda function
+  const Affiliate = new NodejsFunction(scope, "ManAffiliateifest", {
+    memorySize: 128,
+    timeout: Duration.seconds(5),
+    runtime: Runtime.NODEJS_16_X,
+    handler: "createAffiliate",
+    entry: path.join(
+      __dirname,
+      "/../src/backend-connector/Affiliate/createAffiliate.ts"
+    ),
+    environment: {
+      TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
+      TABLE_NAME: PaymentTrackTable.tableName,
+    },
+  });
+
+  // create Lambda Proxy Integration and resource, and add integration to api resource
+  const AffiliateLambdaIntegration = new LambdaIntegration(Affiliate);
+  const AffiliateResource = PaymentApi.root.addResource("affiliate");
+  AffiliateResource.addMethod("POST", AffiliateLambdaIntegration);
 
   // Create UserPost Lambda function
   const UserApi = new NodejsFunction(scope, "User", {
     memorySize: 128,
     timeout: Duration.seconds(5),
     runtime: Runtime.NODEJS_16_X,
-    handler: 'handler',
+    handler: "handler",
     entry: path.join(__dirname, "/../src/backend-front/User/handler.ts"),
     bundling: {
-      minify: true
+      minify: true,
     },
     environment: {
-      TABLE_NAME: PaymentTrackTable.tableName
+      TABLE_NAME: PaymentTrackTable.tableName,
     },
   });
 
@@ -77,50 +116,68 @@ export const configureBackend = (scope: any) => {
   UserApiResource.addMethod("POST", UserApiLambdaIntegration);
 
   // Create PendingPaymentStream Lambda function
-  const PendingPaymentStream = new NodejsFunction(scope, "PendingPaymentStream", {
-    memorySize: 128,
-    timeout: Duration.seconds(5),
-    runtime: Runtime.NODEJS_16_X,
-    handler: 'handler',
-    entry: path.join(__dirname, "/../src/backend-connector/PendingPaymentStream/handler.ts"),
-    environment: {
-      TABLE_NAME: PaymentTrackTable.tableName,
-      PENDING_PAYMENT_QUEUE:  PendingPaymentQueue.queueName,
-    },
-  });
+  const PendingPaymentStream = new NodejsFunction(
+    scope,
+    "PendingPaymentStream",
+    {
+      memorySize: 128,
+      timeout: Duration.seconds(5),
+      runtime: Runtime.NODEJS_16_X,
+      handler: "handler",
+      entry: path.join(
+        __dirname,
+        "/../src/backend-connector/PendingPaymentStream/handler.ts"
+      ),
+      environment: {
+        TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
+        TABLE_NAME: PaymentTrackTable.tableName,
+        PENDING_PAYMENT_QUEUE: PendingPaymentQueue.queueName,
+      },
+    }
+  );
 
-  PendingPaymentStream.addEventSource(new DynamoEventSource(PaymentTrackTable, {
-    startingPosition: StartingPosition.TRIM_HORIZON,
-    batchSize: 1,
-    retryAttempts: 10,
-    filters: [
-      FilterCriteria.filter({
-        eventName: FilterRule.isEqual("INSERT"),
-        dynamodb: {
-          NewImage: { status: { S: FilterRule.isEqual("undefined") } }
-        }
-      }),
-      FilterCriteria.filter({
-        eventName: FilterRule.isEqual("MODIFY"),
-        dynamodb: {
-          NewImage: { status: { S: FilterRule.isEqual("undefined") } }
-        }
-      })
-    ]
-  }));
+  PendingPaymentStream.addEventSource(
+    new DynamoEventSource(PaymentTrackTable, {
+      startingPosition: StartingPosition.TRIM_HORIZON,
+      batchSize: 1,
+      retryAttempts: 10,
+      filters: [
+        FilterCriteria.filter({
+          eventName: FilterRule.isEqual("INSERT"),
+          dynamodb: {
+            NewImage: { status: { S: FilterRule.isEqual("undefined") } },
+          },
+        }),
+        FilterCriteria.filter({
+          eventName: FilterRule.isEqual("MODIFY"),
+          dynamodb: {
+            NewImage: { status: { S: FilterRule.isEqual("undefined") } },
+          },
+        }),
+      ],
+    })
+  );
 
   // Create ProcessPendingPayment Lambda function
-  const ProcessPendingPayment = new NodejsFunction(scope, "ProcessPendingPayment", {
-    memorySize: 128,
-    timeout: Duration.seconds(5),
-    runtime: Runtime.NODEJS_16_X,
-    handler: 'handler',
-    entry: path.join(__dirname, "/../src/backend-connector/ProcessPendingPayment/handler.ts"),
-    environment: {
-      TABLE_NAME: PaymentTrackTable.tableName,
-      PENDING_PAYMENT_QUEUE:  PendingPaymentQueue.queueName,
-    },
-  });
+  const ProcessPendingPayment = new NodejsFunction(
+    scope,
+    "ProcessPendingPayment",
+    {
+      memorySize: 128,
+      timeout: Duration.seconds(5),
+      runtime: Runtime.NODEJS_16_X,
+      handler: "handler",
+      entry: path.join(
+        __dirname,
+        "/../src/backend-connector/ProcessPendingPayment/handler.ts"
+      ),
+      environment: {
+        TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
+        TABLE_NAME: PaymentTrackTable.tableName,
+        PENDING_PAYMENT_QUEUE: PendingPaymentQueue.queueName,
+      },
+    }
+  );
 
   // Add SQS Event Source to Lambda Function
   ProcessPendingPayment.addEventSource(
@@ -138,10 +195,14 @@ export const configureBackend = (scope: any) => {
     memorySize: 128,
     timeout: Duration.seconds(5),
     runtime: Runtime.NODEJS_16_X,
-    handler: 'handler',
-    entry: path.join(__dirname, "/../src/backend-connector/Manifest/handler.ts"),
+    handler: "handler",
+    entry: path.join(
+      __dirname,
+      "/../src/backend-connector/Manifest/handler.ts"
+    ),
     environment: {
-      TABLE_NAME: PaymentTrackTable.tableName
+      TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
+      TABLE_NAME: PaymentTrackTable.tableName,
     },
   });
 
@@ -155,10 +216,11 @@ export const configureBackend = (scope: any) => {
     memorySize: 128,
     timeout: Duration.seconds(5),
     runtime: Runtime.NODEJS_16_X,
-    handler: 'handler',
+    handler: "handler",
     entry: path.join(__dirname, "/../src/backend-connector/Payment/handler.ts"),
     environment: {
-      TABLE_NAME: PaymentTrackTable.tableName
+      TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
+      TABLE_NAME: PaymentTrackTable.tableName,
     },
   });
 
@@ -173,17 +235,22 @@ export const configureBackend = (scope: any) => {
     memorySize: 128,
     timeout: Duration.seconds(5),
     runtime: Runtime.NODEJS_16_X,
-    handler: 'handler',
-    entry: path.join(__dirname, "/../src/backend-connector/Cancellation/handler.ts"),
+    handler: "handler",
+    entry: path.join(
+      __dirname,
+      "/../src/backend-connector/Cancellation/handler.ts"
+    ),
     environment: {
-      TABLE_NAME: PaymentTrackTable.tableName
+      TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
+      TABLE_NAME: PaymentTrackTable.tableName,
     },
   });
 
   // create Lambda Proxy Integration and resource, and add integration to api resource
   const CancellationLambdaIntegration = new LambdaIntegration(Cancellation);
   const PaymentResourceWithId = PaymentResource.addResource("{paymentId}");
-  const CancellationResource = PaymentResourceWithId.addResource("cancellations");
+  const CancellationResource =
+    PaymentResourceWithId.addResource("cancellations");
   CancellationResource.addMethod("POST", CancellationLambdaIntegration);
   PaymentTrackTable.grantReadWriteData(Cancellation);
 
@@ -192,10 +259,14 @@ export const configureBackend = (scope: any) => {
     memorySize: 128,
     timeout: Duration.seconds(5),
     runtime: Runtime.NODEJS_16_X,
-    handler: 'handler',
-    entry: path.join(__dirname, "/../src/backend-connector/Settlement/handler.ts"),
+    handler: "handler",
+    entry: path.join(
+      __dirname,
+      "/../src/backend-connector/Settlement/handler.ts"
+    ),
     environment: {
-      TABLE_NAME: PaymentTrackTable.tableName
+      TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
+      TABLE_NAME: PaymentTrackTable.tableName,
     },
   });
 
@@ -210,10 +281,11 @@ export const configureBackend = (scope: any) => {
     memorySize: 128,
     timeout: Duration.seconds(5),
     runtime: Runtime.NODEJS_16_X,
-    handler: 'handler',
+    handler: "handler",
     entry: path.join(__dirname, "/../src/backend-connector/Refund/handler.ts"),
     environment: {
-      TABLE_NAME: PaymentTrackTable.tableName
+      TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
+      TABLE_NAME: PaymentTrackTable.tableName,
     },
   });
 
@@ -222,7 +294,6 @@ export const configureBackend = (scope: any) => {
   const RefundResource = PaymentResourceWithId.addResource("refunds");
   RefundResource.addMethod("POST", RefundLambdaIntegration);
   PaymentTrackTable.grantReadWriteData(Refund);
-
 
   /////// PERMISSIONS
 
@@ -235,4 +306,4 @@ export const configureBackend = (scope: any) => {
   //Provide access to PendingPaymentStream on
   PendingPaymentQueue.grantSendMessages(PendingPaymentStream);
   PendingPaymentQueue.grantConsumeMessages(ProcessPendingPayment);
-}
+};
