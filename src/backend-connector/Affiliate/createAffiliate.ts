@@ -1,5 +1,7 @@
 import { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from "aws-lambda";
 import AWS from "aws-sdk";
+import axios from "axios";
+
 const TABLE_AFFLIATES = process.env.TABLE_AFFLIATES;
 const ddbResource = new AWS.DynamoDB.DocumentClient();
 
@@ -10,31 +12,123 @@ export const createAffiliate = async (
     throw new Error("No body found");
   }
   const requestBody = JSON.parse(event.body) as {
-    document: string;
+    fullName: string;
+    storeName: string;
     email: string;
+    documentType: "cpf" | "cnpj";
+    document: string;
+    phone: string;
+    urlIdentifier: string;
+    cep: string;
+    number: string;
+    street: string;
+    neighborhood: string;
+    complement: string;
+    city: string;
+    state: string;
+    country: string;
+    facebook?: string;
+    instagram?: string;
+    whatsapp?: string;
+    gtmId?: string;
   }; // criar interface para o payload que deve ser enviado
 
   const documentAffiliate = requestBody["document"].replace(/\D/g, "");
+  const [firstName, lastName] = requestBody["fullName"].split(" ");
+  const dateInputAffiliate = Date.now();
 
   const payloadStripe = {
     document: documentAffiliate,
     email: requestBody.email,
-    //etc
+    country: "BR",
+    type: "custom",
+    business_type: "individual",
+    individual: {
+      address: {
+        city: requestBody["city"],
+        country: "BR",
+        line1: "address_full_match",
+        postal_code: requestBody["cep"],
+        state: requestBody["state"],
+      },
+      dob: {
+        day: "1",
+        month: "1",
+        year: "1901",
+      },
+      email: requestBody["email"],
+      first_name: firstName,
+      last_name: lastName,
+      phone: "+0000000000",
+      political_exposure: "none",
+    },
+    charges_enabled: true,
+    capabilities: {
+      card_payments: { requested: true },
+      transfers: { requested: true },
+    },
+    payouts_enabled: true,
+    tos_acceptance: {
+      date: dateInputAffiliate,
+      ip: "0.0.0.0",
+    },
   };
-  const stripeId = "";
+  const authStripe = {
+    headers: {
+      Authorization:
+        "Bearer sk_test_51NFh92GpJfEl5GcVKAAl7MQCWarBxfkW08Mv24d9Qi9rfj9LVrCjiGacbrLDKEr0T8Bk2VZDlyqePETnP2LhR0a700Ezdi6rpb",
+    },
+  };
   /* Make stripe request */
   // await axios.post()
+  const stripeResponse = await axios.post(
+    "https://api.stripe.com/v1/accounts",
+    payloadStripe,
+    authStripe
+  );
+  const stripeId = stripeResponse.data.id;
 
   // Depois de Criar Affiliado na Stripe Execute isto
-
   const payloadVtex = {
     document: documentAffiliate,
     email: requestBody.email,
-    //etc
+    slug: requestBody["urlIdentifier"],
+    name: requestBody["fullName"],
+    storeName: requestBody["storeName"],
+    phone: requestBody["phone"],
+    address: {
+      city: requestBody["city"],
+      complement: requestBody["complement"],
+      country: requestBody["country"],
+      neighborhood: requestBody["neighborhood"],
+      number: requestBody["number"],
+      postalCode: requestBody["cep"],
+      reference: requestBody["complement"],
+      state: requestBody["state"],
+      street: requestBody["street"],
+    },
+    marketing: {
+      instagram: requestBody["instagram"],
+      whatsapp: requestBody["whatsapp"],
+      facebook: requestBody["facebook"],
+      gtmId: requestBody["gtmId"],
+    },
   };
-  const vtexId = "";
-  /* Make stripe request */
-  // await axios.post('https://vtexdayhackathon.vtexcommercestable.com.br/_v/affiliate', payloadVtex, { appKey e appToken no header })
+  const authVtex = {
+    headers: {
+      "X-VTEX-API-AppKey": "vtexappkey-vtexdayhackathon2-ZKHEIV",
+      "X-VTEX-API-AppToken":
+        "KIBZYABWMNWRAVDJOBTLCFAXDXQIIERJWOQFECMRUHOGGXUHHXAWEMYZEXEYTBDOCRFQLIGLMERKIIXPTBWPGJZGLZKDDEKOFUFEEKFIIUCGZRKGXGSQQJRYYFRRYSIZ",
+    },
+  };
+
+  /* Make VTEX request */
+  const vtexResponse = await axios.post(
+    "https://vtexdayhackathon2.vtexcommercestable.com.br/_v/affiliate",
+    payloadVtex,
+    authVtex
+  );
+  const vtexId = vtexResponse.data.id;
 
   // Depois de criar afiliado na vtex execute isso
   const itemsDict = {
