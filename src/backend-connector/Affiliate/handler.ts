@@ -138,7 +138,7 @@ export const handler = async (
     purchaserRecipientId: stripeId,
   };
   try {
-    const data = await ddbResource
+    await ddbResource
       .put({
         TableName: TABLE_AFFLIATES,
         Item: itemsDict,

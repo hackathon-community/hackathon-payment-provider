@@ -37,15 +37,16 @@ export const handler = async (
     const requestBody = JSON.parse(event.body) as AuthorizationRequest;
     const params = {
       TableName: TABLE_NAME,
-      Key: {
-        paymentId: { S: requestBody.paymentId },
+      KeyConditionExpression: "paymentId = :paymentId",
+      ExpressionAttributeValues: {
+        ":paymentId": requestBody.paymentId,
       },
     };
-    const conPaymentData = await ddbResource.getItem(params);
+    const conPaymentData = await ddbResource.query(params);
 
     let conPayment = null;
-    if (conPaymentData && conPaymentData.Item) {
-      conPayment = conPaymentData.Item as ConPayment;
+    if (conPaymentData && conPaymentData.Items?.length > 0) {
+      conPayment = conPaymentData.Items[0] as ConPayment;
     }
 
     if (!conPayment) {
@@ -114,7 +115,7 @@ export const handler = async (
         keyStripe
       );
       console.log("paymentIntent", paymentIntent);
-      const itemDict = {
+      const itemDict: ConPayment = {
         paymentId: requestBody.paymentId,
         authorizationId: uuidv4(),
         nsu: uuidv4(),
@@ -141,7 +142,7 @@ export const handler = async (
 
     return await handleStatusPayment(conPayment, keyStripe);
   } catch (error) {
-    // console.log("🚀 ~ file: handler.ts:135 ~ error:", error);
+    console.log("🚀 ~ file: handler.ts:135 ~ error:", error);
 
     return {
       body: JSON.stringify({
@@ -223,7 +224,6 @@ async function handleStatusPayment(itemDict: ConPayment, keyStripe: string) {
       Item: { ...itemDict, status },
       ReturnValues: "NONE",
       ReturnConsumedCapacity: "TOTAL",
-      ConditionExpression: "attribute_not_exists(paymentId)",
     })
     .promise();
   const authorizationResponse = {

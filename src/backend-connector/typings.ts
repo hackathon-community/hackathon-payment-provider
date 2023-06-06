@@ -466,14 +466,14 @@ export interface Supplier {
 
 export interface ConPayment {
   paymentId: string;
-  authorizationId: string;
+  authorizationId?: string;
   nsu: string;
   tid: string;
   paymentMethodId: string;
-  cancellationId: Maybe<string> | undefined;
-  refundId: Maybe<string> | undefined;
+  cancellationId?: Maybe<string> | undefined;
+  refundId?: Maybe<string> | undefined;
   paymentMethod: any;
-  settleId: Maybe<string> | undefined;
+  settleId?: Maybe<string> | undefined;
   status:
     | "requires_payment_method"
     | "requires_confirmation"

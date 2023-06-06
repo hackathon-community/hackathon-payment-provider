@@ -22,11 +22,12 @@ export const handler = async (
   const { paymentId, requestId } = event.pathParameters;
   const params = {
     TableName: TABLE_NAME,
-    Key: {
-      paymentId: { S: paymentId },
+    KeyConditionExpression: "paymentId = :paymentId",
+    ExpressionAttributeValues: {
+      ":paymentId": paymentId,
     },
   };
-  const conPaymentData = await ddbResource.getItem(params);
+  const conPaymentData = await ddbResource.query(params);
   const settlementResponse: SettlementResponse = {
     paymentId: paymentId,
     settleId: null,
@@ -35,10 +36,10 @@ export const handler = async (
     message: "",
     requestId: requestId,
   };
-  if (!conPaymentData || !conPaymentData.Item) {
+  if (!conPaymentData || conPaymentData.Items?.length < 1) {
     settlementResponse.message = "Payment not created";
   } else {
-    const conPaymentItem = conPaymentData.Item as ConPayment;
+    const conPaymentItem = conPaymentData.Items[0] as ConPayment;
     let status = "canceled";
     const settleData = await capturePaymentIntent(
       conPaymentItem.tid,
@@ -71,7 +72,6 @@ export const handler = async (
         },
         ReturnValues: "NONE",
         ReturnConsumedCapacity: "TOTAL",
-        ConditionExpression: "attribute_not_exists(paymentId)",
       })
       .promise();
   }
