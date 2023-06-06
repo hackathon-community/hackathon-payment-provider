@@ -3,6 +3,9 @@ import AWS from "aws-sdk";
 import axios from "axios";
 
 const TABLE_AFFLIATES = process.env.TABLE_AFFLIATES;
+const STRIPE_AFFLIATES = process.env.STRIPE_AFFLIATES;
+const VTEXTOKEN_AFFLIATES = process.env.VTEXTOKEN_AFFLIATES;
+const VTEXKEY_AFFLIATES = process.env.VTEXKEY_AFFLIATES;
 const ddbResource = new AWS.DynamoDB.DocumentClient();
 
 export const createAffiliate = async (
@@ -75,8 +78,7 @@ export const createAffiliate = async (
   };
   const authStripe = {
     headers: {
-      Authorization:
-        "Bearer sk_test_51NFh92GpJfEl5GcVKAAl7MQCWarBxfkW08Mv24d9Qi9rfj9LVrCjiGacbrLDKEr0T8Bk2VZDlyqePETnP2LhR0a700Ezdi6rpb",
+      Authorization: STRIPE_AFFLIATES
     },
   };
   /* Make stripe request */
@@ -116,9 +118,8 @@ export const createAffiliate = async (
   };
   const authVtex = {
     headers: {
-      "X-VTEX-API-AppKey": "vtexappkey-vtexdayhackathon2-ZKHEIV",
-      "X-VTEX-API-AppToken":
-        "KIBZYABWMNWRAVDJOBTLCFAXDXQIIERJWOQFECMRUHOGGXUHHXAWEMYZEXEYTBDOCRFQLIGLMERKIIXPTBWPGJZGLZKDDEKOFUFEEKFIIUCGZRKGXGSQQJRYYFRRYSIZ",
+      "X-VTEX-API-AppKey": VTEXKEY_AFFLIATES,
+      "X-VTEX-API-AppToken": VTEXTOKEN_AFFLIATES
     },
   };
 
