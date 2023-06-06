@@ -75,14 +75,14 @@ export const configureBackend = (scope: any) => {
   /////// LAMBDAS
 
   // Create Affiliate Lambda function
-  const Affiliate = new NodejsFunction(scope, "ManAffiliateifest", {
+  const Affiliate = new NodejsFunction(scope, "Affiliate", {
     memorySize: 128,
     timeout: Duration.seconds(5),
     runtime: Runtime.NODEJS_16_X,
-    handler: "createAffiliate",
+    handler: "handler",
     entry: path.join(
       __dirname,
-      "/../src/backend-connector/Affiliate/createAffiliate.ts"
+      "/../src/backend-connector/Affiliate/handler.ts"
     ),
     environment: {
       TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
@@ -94,6 +94,7 @@ export const configureBackend = (scope: any) => {
   const AffiliateLambdaIntegration = new LambdaIntegration(Affiliate);
   const AffiliateResource = PaymentApi.root.addResource("affiliate");
   AffiliateResource.addMethod("POST", AffiliateLambdaIntegration);
+  AffiliatesAssociationTable.grantReadWriteData(Affiliate);
 
   // Create UserPost Lambda function
   const UserApi = new NodejsFunction(scope, "User", {
@@ -114,7 +115,8 @@ export const configureBackend = (scope: any) => {
   const UserApiLambdaIntegration = new LambdaIntegration(UserApi);
   const UserApiResource = PaymentApi.root.addResource("user");
   UserApiResource.addMethod("POST", UserApiLambdaIntegration);
-
+  const keyStripe =
+    "sk_test_51NFh92GpJfEl5GcVKAAl7MQCWarBxfkW08Mv24d9Qi9rfj9LVrCjiGacbrLDKEr0T8Bk2VZDlyqePETnP2LhR0a700Ezdi6rpb";
   // Create PendingPaymentStream Lambda function
   const PendingPaymentStream = new NodejsFunction(
     scope,
@@ -129,6 +131,7 @@ export const configureBackend = (scope: any) => {
         "/../src/backend-connector/PendingPaymentStream/handler.ts"
       ),
       environment: {
+        KEY_STRIPE: keyStripe,
         TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
         TABLE_NAME: PaymentTrackTable.tableName,
         PENDING_PAYMENT_QUEUE: PendingPaymentQueue.queueName,
@@ -172,6 +175,7 @@ export const configureBackend = (scope: any) => {
         "/../src/backend-connector/ProcessPendingPayment/handler.ts"
       ),
       environment: {
+        KEY_STRIPE: keyStripe,
         TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
         TABLE_NAME: PaymentTrackTable.tableName,
         PENDING_PAYMENT_QUEUE: PendingPaymentQueue.queueName,
@@ -201,6 +205,7 @@ export const configureBackend = (scope: any) => {
       "/../src/backend-connector/Manifest/handler.ts"
     ),
     environment: {
+      KEY_STRIPE: keyStripe,
       TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
       TABLE_NAME: PaymentTrackTable.tableName,
     },
@@ -219,6 +224,7 @@ export const configureBackend = (scope: any) => {
     handler: "handler",
     entry: path.join(__dirname, "/../src/backend-connector/Payment/handler.ts"),
     environment: {
+      KEY_STRIPE: keyStripe,
       TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
       TABLE_NAME: PaymentTrackTable.tableName,
     },
@@ -229,6 +235,7 @@ export const configureBackend = (scope: any) => {
   const PaymentResource = PaymentApi.root.addResource("payments");
   PaymentResource.addMethod("POST", PaymentLambdaIntegration);
   PaymentTrackTable.grantReadWriteData(Payment);
+  AffiliatesAssociationTable.grantReadWriteData(Payment);
 
   // Create Cancellation Lambda function
   const Cancellation = new NodejsFunction(scope, "Cancellation", {
@@ -241,6 +248,7 @@ export const configureBackend = (scope: any) => {
       "/../src/backend-connector/Cancellation/handler.ts"
     ),
     environment: {
+      KEY_STRIPE: keyStripe,
       TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
       TABLE_NAME: PaymentTrackTable.tableName,
     },
@@ -253,7 +261,7 @@ export const configureBackend = (scope: any) => {
     PaymentResourceWithId.addResource("cancellations");
   CancellationResource.addMethod("POST", CancellationLambdaIntegration);
   PaymentTrackTable.grantReadWriteData(Cancellation);
-
+  AffiliatesAssociationTable.grantReadWriteData(Cancellation);
   // Create Settlement Lambda function
   const Settlement = new NodejsFunction(scope, "Settlement", {
     memorySize: 128,
@@ -265,6 +273,7 @@ export const configureBackend = (scope: any) => {
       "/../src/backend-connector/Settlement/handler.ts"
     ),
     environment: {
+      KEY_STRIPE: keyStripe,
       TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
       TABLE_NAME: PaymentTrackTable.tableName,
     },
@@ -275,6 +284,7 @@ export const configureBackend = (scope: any) => {
   const SettlementResource = PaymentResourceWithId.addResource("settlements");
   SettlementResource.addMethod("POST", SettlementLambdaIntegration);
   PaymentTrackTable.grantReadWriteData(Settlement);
+  AffiliatesAssociationTable.grantReadWriteData(Settlement);
 
   // Create Refund Lambda function
   const Refund = new NodejsFunction(scope, "Refund", {
@@ -284,6 +294,7 @@ export const configureBackend = (scope: any) => {
     handler: "handler",
     entry: path.join(__dirname, "/../src/backend-connector/Refund/handler.ts"),
     environment: {
+      KEY_STRIPE: keyStripe,
       TABLE_AFFILIATES: AffiliatesAssociationTable.tableName,
       TABLE_NAME: PaymentTrackTable.tableName,
     },
@@ -294,13 +305,17 @@ export const configureBackend = (scope: any) => {
   const RefundResource = PaymentResourceWithId.addResource("refunds");
   RefundResource.addMethod("POST", RefundLambdaIntegration);
   PaymentTrackTable.grantReadWriteData(Refund);
+  AffiliatesAssociationTable.grantReadWriteData(Refund);
 
   /////// PERMISSIONS
 
   //Provide access to Lambdas on PaymentTrackTable
   PaymentTrackTable.grantReadWriteData(Payment);
+  AffiliatesAssociationTable.grantReadWriteData(Payment);
   PaymentTrackTable.grantReadWriteData(PendingPaymentStream);
+  AffiliatesAssociationTable.grantReadWriteData(PendingPaymentStream);
   PaymentTrackTable.grantReadWriteData(ProcessPendingPayment);
+  AffiliatesAssociationTable.grantReadWriteData(ProcessPendingPayment);
   PaymentTrackTable.grantStreamRead(PendingPaymentStream);
 
   //Provide access to PendingPaymentStream on

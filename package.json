@@ -1,5 +1,5 @@
 {
-  "name": "connector-community",
+  "name": "con-community",
   "version": "0.1.0",
   "bin": {
     "vtex-connector": "bin/vtex-connector.js"

@@ -8,7 +8,7 @@ const VTEXTOKEN_AFFLIATES = process.env.VTEXTOKEN_AFFLIATES;
 const VTEXKEY_AFFLIATES = process.env.VTEXKEY_AFFLIATES;
 const ddbResource = new AWS.DynamoDB.DocumentClient();
 
-export const createAffiliate = async (
+export const handler = async (
   event: APIGatewayProxyEventV2
 ): Promise<APIGatewayProxyResultV2> => {
   if (!event.body) {
@@ -78,7 +78,7 @@ export const createAffiliate = async (
   };
   const authStripe = {
     headers: {
-      Authorization: STRIPE_AFFLIATES
+      Authorization: STRIPE_AFFLIATES,
     },
   };
   /* Make stripe request */
@@ -119,7 +119,7 @@ export const createAffiliate = async (
   const authVtex = {
     headers: {
       "X-VTEX-API-AppKey": VTEXKEY_AFFLIATES,
-      "X-VTEX-API-AppToken": VTEXTOKEN_AFFLIATES
+      "X-VTEX-API-AppToken": VTEXTOKEN_AFFLIATES,
     },
   };
 

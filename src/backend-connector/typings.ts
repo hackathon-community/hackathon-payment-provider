@@ -206,6 +206,7 @@ export interface CancellationResponse extends PaymentResponse {
   cancellationId: Maybe<string> | null;
   code: Maybe<string> | null | "cancel-manually";
   message: Maybe<string> | null;
+  requestId: string;
 }
 
 export interface CustomField {
@@ -431,6 +432,12 @@ export interface PaymentIntent {
   transfer_group?: string;
   transfer_data?: TransferData[];
   currency: string;
+  error?: {
+    code: string;
+    message: string;
+    type: string;
+    decline_code: string;
+  };
 }
 
 export interface RecipientsBuilderPayload {
@@ -455,4 +462,24 @@ export interface Supplier {
   commissionAmount: number;
   chargeProcesssingFee: boolean;
   chargebackLiable: boolean;
+}
+
+export interface ConPayment {
+  paymentId: string;
+  authorizationId: string;
+  nsu: string;
+  tid: string;
+  paymentMethodId: string;
+  cancellationId: Maybe<string> | undefined;
+  refundId: Maybe<string> | undefined;
+  paymentMethod: any;
+  settleId: Maybe<string> | undefined;
+  status:
+    | "requires_payment_method"
+    | "requires_confirmation"
+    | "requires_action"
+    | "processing"
+    | "requires_capture"
+    | "canceled"
+    | "succeeded";
 }
